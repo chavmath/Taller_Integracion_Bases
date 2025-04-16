@@ -27,25 +27,23 @@ def mostrar_inventario():
             row[0], row[1], row[2], row[3]
         ))
 
-# Registrar una venta y actualizar inventario
-def registrar_venta(id_producto, cantidad_vendida, tienda_origen):
-    fecha_venta = datetime.datetime.now()
+# Ver Auditoría de cambios en el estado de stock
+def ver_auditoria_stock():
+    cursor.execute("SELECT * FROM AuditoriaEstadoStock")
     
-    # Insertar la venta en la tabla Ventas
-    cursor.execute("""
-        INSERT INTO Ventas (id_producto, cantidad_vendida, fecha_venta, tienda_origen)
-        VALUES (?, ?, ?, ?)
-    """, id_producto, cantidad_vendida, fecha_venta, tienda_origen)
+    # Obtener los nombres de las columnas
+    columns = [column[0] for column in cursor.description]
     
-    # Actualizar el inventario
-    cursor.execute("""
-        UPDATE Inventario
-        SET cantidad_disponible = cantidad_disponible - ?
-        WHERE id_producto_inv = ?
-    """, cantidad_vendida, id_producto)
+    # Imprimir los títulos de las columnas con un formato limpio
+    print("{:<15} {:<15} {:<20} {:<20}".format(  # Quitamos la fecha de cambio aquí
+        columns[0], columns[1], columns[2], columns[3]
+    ))  # Ajustar el ancho de las columnas
     
-    conn.commit()
-    print("Venta registrada y stock actualizado.")
+    # Imprimir los datos con alineación
+    for row in cursor.fetchall():
+        print("{:<15} {:<15} {:<20} {:<20}".format(
+            row[0], row[1], row[2], row[3]
+        ))
 
 # Actualizar el precio de un producto
 def actualizar_precio(id_producto, nuevo_precio):
@@ -84,15 +82,41 @@ def agregar_producto():
     conn.commit()
     print("Producto agregado al inventario.")
 
+# Agregar cantidad al inventario de un producto
+def agregar_cantidad_inventario():
+    id_producto = int(input("ID del producto al que se le agregará cantidad: "))
+    cantidad_agregada = int(input("Cantidad a agregar al inventario: "))
+    
+    # Actualizar la cantidad disponible del producto
+    cursor.execute("""
+        UPDATE Inventario
+        SET cantidad_disponible = cantidad_disponible + ?
+        WHERE id_producto_inv = ?
+    """, cantidad_agregada, id_producto)
+    
+    # Registrar el cambio de estado en AuditoriaEstadoStock (sin incluir la fecha de cambio)
+    cursor.execute("""
+        INSERT INTO AuditoriaEstadoStock (id_producto, estado_anterior, nuevo_estado)
+        SELECT id_producto_inv,
+               estado_stock,
+               CASE WHEN cantidad_disponible <= 0 THEN 'No hay stock' ELSE 'Disponible' END
+        FROM Inventario
+        WHERE id_producto_inv = ?
+    """, id_producto)
+    
+    conn.commit()
+    print(f"{cantidad_agregada} unidades agregadas al inventario del producto con ID {id_producto}.")
+
 # Menú del sistema de inventario
 def menu_inventario():
     while True:
         print("\nSistema de Inventario")
         print("1. Mostrar inventario")
-        print("2. Registrar venta")
-        print("3. Actualizar precio")
-        print("4. Agregar producto al inventario")
-        print("5. Salir")
+        print("2. Actualizar precio")
+        print("3. Agregar producto al inventario")
+        print("4. Agregar cantidad al inventario")
+        print("5. Ver Auditoría de Stock")
+        print("6. Salir")
         
         opcion = input("Elige una opción: ")
         
@@ -100,16 +124,15 @@ def menu_inventario():
             mostrar_inventario()
         elif opcion == "2":
             id_producto = int(input("ID del producto: "))
-            cantidad_vendida = int(input("Cantidad vendida: "))
-            tienda_origen = input("Tienda origen: ")
-            registrar_venta(id_producto, cantidad_vendida, tienda_origen)
-        elif opcion == "3":
-            id_producto = int(input("ID del producto: "))
             nuevo_precio = float(input("Nuevo precio: "))
             actualizar_precio(id_producto, nuevo_precio)
-        elif opcion == "4":
+        elif opcion == "3":
             agregar_producto()
+        elif opcion == "4":
+            agregar_cantidad_inventario()
         elif opcion == "5":
+            ver_auditoria_stock()
+        elif opcion == "6":
             break
         else:
             print("Opción no válida.")
