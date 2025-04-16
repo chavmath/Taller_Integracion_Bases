@@ -31,21 +31,35 @@ def mostrar_ventas():
 def registrar_venta(id_producto, cantidad_vendida, tienda_origen):
     fecha_venta = datetime.datetime.now()
     
-    # Insertar la venta en la tabla Ventas
+    # Verificar si hay suficiente stock
     cursor.execute("""
-        INSERT INTO Ventas (id_producto, cantidad_vendida, fecha_venta, tienda_origen)
-        VALUES (?, ?, ?, ?)
-    """, id_producto, cantidad_vendida, fecha_venta, tienda_origen)
+        SELECT cantidad_disponible FROM Inventario WHERE id_producto_inv = ?
+    """, id_producto)
+    cantidad_disponible = cursor.fetchone()[0]
     
-    # Actualizar el inventario
-    cursor.execute("""
-        UPDATE Inventario
-        SET cantidad_disponible = cantidad_disponible - ?
-        WHERE id_producto_inv = ?
-    """, cantidad_vendida, id_producto)
+    if cantidad_disponible < cantidad_vendida:
+        print(f"Error: No hay suficiente stock. Solo hay {cantidad_disponible} unidades disponibles.")
+        return
     
-    conn.commit()
-    print("Venta registrada y stock actualizado.")
+    try:
+        # Insertar la venta en la tabla Ventas
+        cursor.execute("""
+            INSERT INTO Ventas (id_producto, cantidad_vendida, fecha_venta, tienda_origen)
+            VALUES (?, ?, ?, ?)
+        """, id_producto, cantidad_vendida, fecha_venta, tienda_origen)
+        
+        # Actualizar el inventario
+        cursor.execute("""
+            UPDATE Inventario
+            SET cantidad_disponible = cantidad_disponible - ?
+            WHERE id_producto_inv = ?
+        """, cantidad_vendida, id_producto)
+        
+        conn.commit()
+        print("Venta registrada y stock actualizado.")
+    except Exception as e:
+        print(f"Error al registrar la venta: {e}")
+        conn.rollback()
 
 # Menú del sistema POS
 def menu_pos():
@@ -60,10 +74,13 @@ def menu_pos():
         if opcion == "1":
             mostrar_ventas()
         elif opcion == "2":
-            id_producto = int(input("ID del producto: "))
-            cantidad_vendida = int(input("Cantidad vendida: "))
-            tienda_origen = input("Tienda origen: ")
-            registrar_venta(id_producto, cantidad_vendida, tienda_origen)
+            try:
+                id_producto = int(input("ID del producto: "))
+                cantidad_vendida = int(input("Cantidad vendida: "))
+                tienda_origen = input("Tienda origen: ")
+                registrar_venta(id_producto, cantidad_vendida, tienda_origen)
+            except ValueError:
+                print("Por favor, ingrese valores válidos para ID del producto y cantidad.")
         elif opcion == "3":
             break
         else:
